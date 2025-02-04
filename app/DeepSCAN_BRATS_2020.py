@@ -64,9 +64,9 @@ parser.add_argument(
     help="Size to pad to before applying classfier.  Should be larger than the input and divisible by 2 :-)",
 )
 
-parser.add_argument("-l", default=False, action="store_true", dest="lite_mode")
-parser.add_argument("-l_na", default=False, action="store_true", dest="lite_mode_na")
-parser.add_argument("-f_na", default=False, action="store_true", dest="full_mode_na")
+parser.add_argument("-lite", default=False, action="store_true", dest="lite")
+parser.add_argument("-lite_no_augment", default=False, action="store_true", dest="lite_no_augment")
+parser.add_argument("-full_no_augment", default=False, action="store_true", dest="full_no_augment")
 parser.add_argument("--indir", type=str)
 
 my_args = parser.parse_args()
@@ -78,11 +78,11 @@ OUTPUT_DIR = os.path.join(my_args.indir, "results")
 PATCH_SIZE = (5, my_args.pad, my_args.pad)
 
 # Whether to activate the lite mode
-if my_args.lite_mode:
+if my_args.lite:
     print("Running pipeline in lite mode...")
-elif my_args.lite_mode_na:
+elif my_args.lite_no_augment:
     print("Running pipeline in lite mode without data augmentation")
-elif my_args.full_mode_na:
+elif my_args.full_no_augment:
     print("Running pipeline in full mode without data augmentation...")
 else:
     print("Running pipeline in full mode...")
@@ -415,7 +415,7 @@ def apply_to_case_uncert(
 
             model.eval()
 
-            if my_args.lite_mode_na or my_args.full_mode_na:
+            if my_args.lite_no_augment or my_args.full_no_augment:
 
                 image_data = case_data
 
@@ -591,7 +591,6 @@ def apply_to_case_uncert(
                                 slice_masks.append(slice_mask)
 
     ensemble_counts = np.sum(slice_masks, axis=0)
-    print(f"Ensemble count shape is {ensemble_counts.shape}")
 
     full_logit = np.sum(
         np.divide(
@@ -605,11 +604,10 @@ def apply_to_case_uncert(
 
     ensemble_predictions = np.greater(np.nan_to_num(ensemble_logits, -10), 0)
 
-    print(f"Full logit shape is {full_logit.shape}")
-
     print(
         f"Axes: {axes}, do mirroring {do_mirroring}, rot angles {rot_angles}, rot_axes {rot_axes}, models {len(models)}"
     )
+    
     full_predictions = np.stack(
         [np.greater(full_logit, 0)]
         * (
@@ -620,10 +618,6 @@ def apply_to_case_uncert(
             * len(models)
         ),
         0,
-    )
-
-    print(
-        f"Shape of full predictions is {full_predictions.shape} and ensemble predictions is {ensemble_predictions.shape}"
     )
 
     preds_agree = np.equal(full_predictions, ensemble_predictions).astype(np.uint8)
@@ -1544,7 +1538,7 @@ def predict_with_uncertainty(
         PATCH_SIZE = (5, 2 * ((im_size + 1) // 2), 2 * ((im_size + 1) // 2))
         print(f"cropped image exceeds patch size: new patch size = {PATCH_SIZE}")
 
-    if my_args.lite_mode or my_args.lite_mode_na or my_args.full_mode_na:
+    if my_args.lite or my_args.lite_no_augment or my_args.full_no_augment:
 
         logits, gradient_mask, _, _, target_probs = (
             apply_to_case_uncert_and_get_target_mask_probs_logits(models, cropped)
@@ -1633,7 +1627,7 @@ existing_seg = resolve_seg(INPUT_DIRS)
 
 # Perform predictions
 if existing_seg is None:
-    if my_args.lite_mode or my_args.lite_mode_na:
+    if my_args.lite or my_args.lite_no_augment:
         seg_postprocessed = predict_with_uncertainty(models=[unets[0]])
     else:
         seg_postprocessed = predict_with_uncertainty()
